@@ -174,6 +174,8 @@ export function Sidebar() {
                         setSelectedSection(section.id);
                         if (hasChildren) {
                             toggleSection(section.id);
+                        } else if (window.innerWidth < 768) {
+                            toggleSidebar();
                         }
                     }}
                 >
@@ -237,7 +239,7 @@ export function Sidebar() {
             <motion.aside
                 initial={{ width: 280 }}
                 animate={{ width: 60 }}
-                className="h-full border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-col"
+                className="h-full border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)] hidden md:flex flex-col"
             >
                 <div className="p-3 flex flex-col items-center gap-4">
                     <button
@@ -252,81 +254,89 @@ export function Sidebar() {
     }
 
     return (
-        <motion.aside
-            initial={{ width: 60 }}
-            animate={{ width: 280 }}
-            className="h-full border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-col"
-        >
-            {/* Header */}
-            <div className="p-4 border-b border-[var(--border-subtle)]">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="font-semibold text-lg">Document Navigator</div>
+        <>
+            {/* Mobile Overlay */}
+            <div
+                className="md:hidden fixed inset-0 bg-black/50 z-40"
+                onClick={toggleSidebar}
+            />
+
+            <motion.aside
+                initial={{ width: 60 }}
+                animate={{ width: 280 }}
+                className="h-full border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-col fixed md:relative z-50 md:z-auto"
+            >
+                {/* Header */}
+                <div className="p-4 border-b border-[var(--border-subtle)]">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="font-semibold text-lg">Document Navigator</div>
+                        <button
+                            onClick={toggleSidebar}
+                            className="p-1 hover:bg-[var(--bg-tertiary)] rounded"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Search sections..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pr-3 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]/50"
+                            style={{ paddingLeft: "2.5rem" }}
+                        />
+                    </div>
+                </div>
+
+                {/* Section Tree */}
+                <div className="flex-1 overflow-y-auto p-2">
+                    {loading ? (
+                        <div className="flex items-center justify-center py-8">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--primary-500)]"></div>
+                        </div>
+                    ) : sections.length === 0 ? (
+                        <div className="text-center py-8 text-[var(--text-muted)]">
+                            <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No sections found</p>
+                            <p className="text-xs mt-1">Add seed data to get started</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            {filteredSections.length > 0 ? (
+                                filteredSections.map((section) => renderSection(section))
+                            ) : (
+                                <div className="text-center py-8 text-[var(--text-muted)]">
+                                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">No sections found</p>
+                                    <p className="text-xs mt-1">Try a different search term</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Add Section Button */}
+                <div className="p-3 border-t border-[var(--border-subtle)]">
                     <button
-                        onClick={toggleSidebar}
-                        className="p-1 hover:bg-[var(--bg-tertiary)] rounded"
+                        onClick={() => setShowAddSectionDialog(true)}
+                        className="w-full flex items-center justify-center gap-2 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
                     >
-                        <ChevronRight className="w-4 h-4" />
+                        <Plus className="w-4 h-4" />
+                        Add Section
                     </button>
                 </div>
 
-                {/* Search */}
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
-                    <input
-                        type="text"
-                        placeholder="Search sections..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pr-3 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]/50"
-                        style={{ paddingLeft: "2.5rem" }}
-                    />
-                </div>
-            </div>
-
-            {/* Section Tree */}
-            <div className="flex-1 overflow-y-auto p-2">
-                {loading ? (
-                    <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--primary-500)]"></div>
-                    </div>
-                ) : sections.length === 0 ? (
-                    <div className="text-center py-8 text-[var(--text-muted)]">
-                        <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No sections found</p>
-                        <p className="text-xs mt-1">Add seed data to get started</p>
-                    </div>
-                ) : (
-                    <div className="space-y-1">
-                        {filteredSections.length > 0 ? (
-                            filteredSections.map((section) => renderSection(section))
-                        ) : (
-                            <div className="text-center py-8 text-[var(--text-muted)]">
-                                <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                                <p className="text-sm">No sections found</p>
-                                <p className="text-xs mt-1">Try a different search term</p>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* Add Section Button */}
-            <div className="p-3 border-t border-[var(--border-subtle)]">
-                <button
-                    onClick={() => setShowAddSectionDialog(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Section
-                </button>
-            </div>
-
-            {/* Add Section Dialog */}
-            <AddSectionDialog
-                isOpen={showAddSectionDialog}
-                onClose={() => setShowAddSectionDialog(false)}
-                onSuccess={fetchSections}
-            />
-        </motion.aside>
+                {/* Add Section Dialog */}
+                <AddSectionDialog
+                    isOpen={showAddSectionDialog}
+                    onClose={() => setShowAddSectionDialog(false)}
+                    onSuccess={fetchSections}
+                />
+            </motion.aside>
+        </>
     );
 }

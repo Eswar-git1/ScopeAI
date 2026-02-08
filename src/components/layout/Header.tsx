@@ -98,7 +98,7 @@ export function Header() {
                     {/* Menu Toggle */}
                     <button
                         onClick={toggleSidebar}
-                        className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors lg:hidden"
+                        className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors md:hidden"
                     >
                         <Menu className="w-5 h-5" />
                     </button>

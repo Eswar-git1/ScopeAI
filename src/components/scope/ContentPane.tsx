@@ -320,7 +320,7 @@ export function ContentPane() {
     }
 
     return (
-        <main className="flex-1 overflow-y-auto p-6 bg-[var(--bg-primary)]">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--bg-primary)]">
             {/* Breadcrumb & Section Header */}
             <motion.div
                 initial={{ opacity: 0, y: -10 }}

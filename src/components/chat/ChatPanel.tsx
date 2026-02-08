@@ -1,21 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
     Send,
     Sparkles,
     X,
-    ChevronDown,
     ThumbsUp,
     ThumbsDown,
     Copy,
-    RotateCcw,
     Loader2,
-    MessageSquare,
     BookOpen,
     Zap,
-    AlertCircle,
     ArrowRight,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -41,9 +37,9 @@ interface ChatMessage {
 
 const suggestedQuestions = [
     "What are the main objectives of this project?",
-    "Explain the RAG pipeline architecture",
+    "Explain the system architecture",
     "What security requirements are defined?",
-    "How does the chatbot ensure zero hallucination?",
+    "Summarize the key deliverables",
 ];
 
 export function ChatPanel() {
@@ -55,7 +51,7 @@ export function ChatPanel() {
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
     const { chatPanelOpen, toggleChatPanel } = useUIStore();
-    const { contextParagraphId, setContextParagraph, aiMode, setAiMode } = useChatStore();
+    const { contextParagraphId, setContextParagraph } = useChatStore();
     const { currentDocument } = useDocumentStore();
 
     useEffect(() => {
@@ -189,7 +185,6 @@ export function ChatPanel() {
         setMessages((prev) =>
             prev.map((m) => (m.id === messageId ? { ...m, feedback } : m))
         );
-        // TODO: Send feedback to API
     };
 
     const copyToClipboard = (text: string) => {
@@ -202,6 +197,15 @@ export function ChatPanel() {
             handleSubmit();
         }
     };
+
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     if (!chatPanelOpen) {
         return (
@@ -217,10 +221,13 @@ export function ChatPanel() {
     return (
         <motion.aside
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 420, opacity: 1 }}
+            animate={{ width: isMobile ? "100%" : 420, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="h-full border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-col"
+            className={cn(
+                "h-full border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-col",
+                isMobile && "fixed inset-0 z-50 border-l-0"
+            )}
         >
             {/* Header */}
             <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
@@ -230,7 +237,7 @@ export function ChatPanel() {
                     </div>
                     <div>
                         <div className="font-semibold text-lg">AI Assistant</div>
-                        <p className="text-xs text-[var(--text-muted)]">Powered by Scope RAG</p>
+                        <p className="text-xs text-[var(--text-muted)]">Hybrid RAG • Zero Hallucination</p>
                     </div>
                 </div>
                 <button
@@ -239,46 +246,6 @@ export function ChatPanel() {
                 >
                     <X className="w-5 h-5" />
                 </button>
-            </div>
-
-            {/* Mode Toggle */}
-            <div className="p-4 border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50">
-                <div className="flex items-center gap-2 bg-[var(--bg-tertiary)] rounded-lg p-1.5 shadow-inner">
-                    <button
-                        onClick={() => setAiMode("research")}
-                        className={cn(
-                            "flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all duration-200",
-                            aiMode === "research"
-                                ? "bg-[var(--primary-500)] text-white shadow-sm"
-                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]/50"
-                        )}
-                    >
-                        <span className="flex items-center justify-center gap-2">
-                            📚 Research
-                        </span>
-                    </button>
-                    <button
-                        onClick={() => setAiMode("critique")}
-                        className={cn(
-                            "flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all duration-200",
-                            aiMode === "critique"
-                                ? "bg-[var(--primary-500)] text-white shadow-sm"
-                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]/50"
-                        )}
-                    >
-                        <span className="flex items-center justify-center gap-2">
-                            🔍 Critique
-                        </span>
-                    </button>
-                </div>
-                <div className="mt-3 flex items-start gap-2 px-1">
-                    <div className="mt-0.5 min-w-[4px] h-[4px] rounded-full bg-[var(--primary-400)]/50" />
-                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                        {aiMode === "research"
-                            ? "Research Mode provides factual answers strictly cited from your scope document. Zero hallucination guarantee."
-                            : "Critique Mode analyzes your scope for gaps, risks, and compliance issues using expert defense software standards."}
-                    </p>
-                </div>
             </div>
 
             {/* Context Indicator */}
@@ -304,9 +271,9 @@ export function ChatPanel() {
                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--primary-500)]/20 to-[var(--primary-700)]/20 flex items-center justify-center mb-4">
                             <Sparkles className="w-8 h-8 text-[var(--primary-400)]" />
                         </div>
-                        <h3 className="font-semibold mb-2">Ask about the scope</h3>
+                        <h3 className="font-semibold mb-2">Ask about the document</h3>
                         <p className="text-sm text-[var(--text-muted)] mb-6 max-w-xs">
-                            Get answers from your scope document with citations. Zero hallucination guaranteed.
+                            Get answers with source citations using hybrid search combining vector + keyword matching.
                         </p>
 
                         {/* Suggested Questions */}
@@ -379,7 +346,7 @@ export function ChatPanel() {
                                                                 className="px-2 py-1 text-xs bg-[var(--primary-500)]/20 text-[var(--primary-400)] rounded-md hover:bg-[var(--primary-500)]/30 transition-colors"
                                                                 title={citation.content_snippet}
                                                             >
-                                                                {citation.paragraph_id}
+                                                                {citation.section_title}
                                                             </button>
                                                         ))}
                                                     </div>
@@ -389,15 +356,10 @@ export function ChatPanel() {
                                             {/* Message Footer */}
                                             <div className="mt-3 flex items-center justify-between text-xs text-[var(--text-muted)]">
                                                 <div className="flex items-center gap-2">
-                                                    {message.model_used && (
-                                                        <span className="flex items-center gap-1">
-                                                            <Zap className="w-3 h-3" />
-                                                            {message.model_used.split("/").pop()?.split(":")[0]}
-                                                        </span>
-                                                    )}
-                                                    {message.latency_ms && (
-                                                        <span>{(message.latency_ms / 1000).toFixed(1)}s</span>
-                                                    )}
+                                                    <span className="flex items-center gap-1">
+                                                        <Zap className="w-3 h-3" />
+                                                        Hybrid Search
+                                                    </span>
                                                 </div>
                                                 <div className="flex items-center gap-1">
                                                     <button
@@ -444,7 +406,7 @@ export function ChatPanel() {
                             >
                                 <div className="bg-[var(--bg-tertiary)] rounded-2xl rounded-bl-md p-4 flex items-center gap-3">
                                     <Loader2 className="w-5 h-5 animate-spin text-[var(--primary-400)]" />
-                                    <span className="text-sm text-[var(--text-muted)]">Searching scope document...</span>
+                                    <span className="text-sm text-[var(--text-muted)]">Searching document...</span>
                                 </div>
                             </motion.div>
                         )}
@@ -462,7 +424,7 @@ export function ChatPanel() {
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Ask about the scope document..."
+                        placeholder="Ask about the document..."
                         rows={1}
                         className="w-full resize-none bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]/50 focus:border-[var(--primary-500)] transition-all"
                         disabled={isLoading}
@@ -485,7 +447,7 @@ export function ChatPanel() {
                     </button>
                 </form>
                 <p className="text-xs text-center text-[var(--text-muted)] mt-2">
-                    AI answers are based strictly on scope content with citations
+                    Answers with citations • Vector + Keyword search
                 </p>
             </div>
         </motion.aside>
