@@ -3,7 +3,16 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  },
+  db: {
+    schema: 'public'
+  }
+});
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
 
@@ -17,7 +26,7 @@ interface ChatRequest {
 export async function POST(req: NextRequest) {
   try {
     const { message, documentId, sessionId, userId }: ChatRequest = await req.json();
-    
+
     if (!message || !documentId || !userId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
@@ -27,7 +36,7 @@ export async function POST(req: NextRequest) {
       ? await getSession(sessionId)
       : await createSession(documentId, userId);
 
-    // Get conversation history  
+    // Get conversation history
     const history = await getConversationHistory(session.id, 5);
 
     // Analyze and expand query
@@ -57,49 +66,27 @@ export async function POST(req: NextRequest) {
     // Save user message
     await saveMessage(session.id, { role: "user", content: message });
 
-    // Stream response
-    const stream = generateStreamingResponse(message, results, history, doc?.title || "Document");
+    // Generate response WITHOUT streaming
+    const fullResponse = await generateResponse(message, results, history, doc?.title || "Document");
 
-    let fullResponse = "";
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of stream) {
-            fullResponse += chunk;
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`));
-          }
-
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            sources: results.slice(0, 5).map((r: any) => ({
-              paragraph_id: r.paragraph_id,
-              section_title: r.section_title,
-              preview: r.content.substring(0, 150),
-            })),
-            sessionId: session.id,
-            done: true,
-          })}\n\n`));
-
-          controller.close();
-
-          await saveMessage(session.id, {
-            role: "assistant",
-            content: fullResponse,
-            sources: results.slice(0, 5),
-          });
-        } catch (error) {
-          controller.error(error);
-        }
-      },
+    // Save assistant message
+    await saveMessage(session.id, {
+      role: "assistant",
+      content: fullResponse,
+      sources: results.slice(0, 5),
     });
 
-    return new Response(readable, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
+    // Return complete response
+    return NextResponse.json({
+      content: fullResponse,
+      sources: results.slice(0, 5).map((r: any) => ({
+        paragraph_id: r.paragraph_id,
+        section_title: r.section_title,
+        preview: r.content.substring(0, 150),
+      })),
+      sessionId: session.id,
     });
+
   } catch (error: any) {
     console.error("Chat error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -116,20 +103,44 @@ async function getSession(sessionId: string) {
 }
 
 async function createSession(documentId: string, userId: string) {
-  const { data, error } = await supabase.from("chat_sessions").insert({
-    document_id: documentId,
-    user_id: userId
-  }).select().single();
+  console.log('Creating session with:', { documentId, userId });
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc('create_chat_session', {
+    p_document_id: documentId,
+    p_user_id: userId
+  });
+
+  if (!rpcError && rpcData && rpcData.length > 0) {
+    const session = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+    console.log('Session created via RPC:', session.id);
+    return session;
+  }
+
+  console.log('Using direct insert fallback...');
+  const { data, error } = await supabase
+    .from("chat_sessions")
+    .insert({
+      document_id: documentId,
+      user_id: userId
+    })
+    .select()
+    .single();
 
   if (error) {
-    console.error("Error creating session:", error);
-    throw new Error("Failed to create session");
+    console.error("Error creating session via direct insert:", {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
+    throw new Error(`Failed to create session: ${error.message}`);
   }
 
   if (!data) {
     throw new Error("No session data returned");
   }
 
+  console.log('Session created via direct insert:', data.id);
   return data;
 }
 
@@ -152,7 +163,7 @@ function analyzeQuery(query: string) {
 
   let expandedQuery = query;
   Object.entries(expansions).forEach(([acronym, full]) => {
-    if (new RegExp(`\b${acronym}\b`, "gi").test(query)) {
+    if (new RegExp(`\\b${acronym}\\b`, "gi").test(query)) {
       expandedQuery += ` ${full}`;
     }
   });
@@ -160,7 +171,8 @@ function analyzeQuery(query: string) {
   return { expandedQuery };
 }
 
-async function* generateStreamingResponse(query: string, results: any[], history: any[], docTitle: string): AsyncGenerator<string> {
+// NON-STREAMING version
+async function generateResponse(query: string, results: any[], history: any[], docTitle: string): Promise<string> {
   const context = `Document: ${docTitle}
 
 Recent conversation:
@@ -171,6 +183,8 @@ ${results.slice(0, 10).map((r: any, i: number) => `[${i + 1}] ${r.section_title}
 
   const systemPrompt = `You are an AI assistant for defense software scope documents. Answer based ONLY on provided content. Cite section numbers. Be professional and precise.`;
 
+  console.log('Calling OpenRouter...');
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -178,36 +192,25 @@ ${results.slice(0, 10).map((r: any, i: number) => `[${i + 1}] ${r.section_title}
       Authorization: `Bearer ${OPENROUTER_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "anthropic/claude-3.5-sonnet",
+      model: "meta-llama/llama-3.2-3b-instruct:free", // FREE model
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `${context}\n\nQuestion: ${query}` },
       ],
       temperature: 0.3,
       max_tokens: 2000,
-      stream: true,
+      stream: false, // NO STREAMING
     }),
   });
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
-
-  const decoder = new TextDecoder();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const lines = decoder.decode(value).split("\n").filter(l => l.trim());
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6);
-        if (data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices[0]?.delta?.content;
-          if (content) yield content;
-        } catch (e) {}
-      }
-    }
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('OpenRouter error:', errorText);
+    throw new Error(`OpenRouter API failed: ${response.status}`);
   }
+
+  const data = await response.json();
+  console.log('OpenRouter response received');
+
+  return data.choices[0]?.message?.content || "No response generated.";
 }

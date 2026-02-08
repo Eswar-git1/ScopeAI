@@ -70,6 +70,7 @@ export function ChatPanel() {
     const { user } = useAuthStore();
 
     const handleSubmit = async (e?: React.FormEvent, customQuery?: string) => {
+        console.log('🚀 HANDLE SUBMIT CALLED');
         e?.preventDefault();
         const query = customQuery || inputValue;
         if (!query.trim() || isLoading) return;
@@ -97,6 +98,7 @@ export function ChatPanel() {
         setMessages((prev) => [...prev, initialAssistantMessage]);
 
         try {
+            console.log('📡 Fetching /api/chat...');
             const response = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -108,62 +110,40 @@ export function ChatPanel() {
                 }),
             });
 
+            console.log('✅ Response received:', response.status);
+
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || "Failed to get response");
             }
 
-            if (!response.body) throw new Error("No response body");
+            // Parse JSON response (non-streaming)
+            const data = await response.json();
+            console.log('📦 Data received:', data);
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let accumulatedContent = "";
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value);
-                const lines = chunk.split("\n\n").filter((line) => line.trim() !== "");
-
-                for (const line of lines) {
-                    if (line.startsWith("data: ")) {
-                        const dataStr = line.replace("data: ", "");
-                        try {
-                            const data = JSON.parse(dataStr);
-
-                            if (data.chunk) {
-                                accumulatedContent += data.chunk;
-                                setMessages((prev) =>
-                                    prev.map((msg) =>
-                                        msg.id === assistantMessageId
-                                            ? { ...msg, content: accumulatedContent }
-                                            : msg
-                                    )
-                                );
-                            } else if (data.done) {
-                                setSessionId(data.sessionId);
-                                setMessages((prev) =>
-                                    prev.map((msg) =>
-                                        msg.id === assistantMessageId
-                                            ? {
-                                                ...msg,
-                                                citations: data.sources.map((s: any) => ({
-                                                    paragraph_id: s.paragraph_id,
-                                                    section_title: s.section_title,
-                                                    content_snippet: s.preview,
-                                                })),
-                                            }
-                                            : msg
-                                    )
-                                );
-                            }
-                        } catch (e) {
-                            console.error("Error parsing SSE data:", e);
-                        }
-                    }
-                }
+            // Update session ID
+            if (data.sessionId) {
+                setSessionId(data.sessionId);
             }
+
+            // Update message with content and citations
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === assistantMessageId
+                        ? {
+                            ...msg,
+                            content: data.content,
+                            citations: data.sources?.map((s: any) => ({
+                                paragraph_id: s.paragraph_id,
+                                section_title: s.section_title,
+                                content_snippet: s.preview,
+                            })),
+                        }
+                        : msg
+                )
+            );
+
+            console.log('✅ Message updated successfully');
             setContextParagraph(null);
         } catch (err: any) {
             console.error("Chat error:", err);
