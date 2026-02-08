@@ -55,7 +55,8 @@ html.light {
   --primary-200: #ddd6fe;
   --primary-300: #c4b5fd;
   --primary-400: #a78bfa;
-  --primary-500: #7c3aed; /* Slightly darker for better visibility */
+  --primary-500: #7c3aed;
+  /* Slightly darker for better visibility */
   --primary-600: #6d28d9;
   --primary-700: #5b21b6;
   --primary-800: #4c1d95;
@@ -658,4 +659,21 @@ p {
 
 .hover-lift:hover {
   transform: translateY(-4px);
+}
+
+/* ==================== HIGHLIGHT FLASH ==================== */
+@keyframes highlight-flash {
+
+  0%,
+  100% {
+    background-color: transparent;
+  }
+
+  50% {
+    background-color: rgb(168 85 247 / 0.2);
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 2s ease-in-out;
 }

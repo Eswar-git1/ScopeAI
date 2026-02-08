@@ -107,12 +107,29 @@ export async function POST(req: NextRequest) {
 }
 
 async function getSession(sessionId: string) {
-  const { data } = await supabase.from("chat_sessions").select("*").eq("id", sessionId).single();
+  const { data, error } = await supabase.from("chat_sessions").select("*").eq("id", sessionId).single();
+  if (error) {
+    console.error("Error getting session:", error);
+    throw new Error("Session not found");
+  }
   return data;
 }
 
 async function createSession(documentId: string, userId: string) {
-  const { data } = await supabase.from("chat_sessions").insert({ document_id: documentId, user_id: userId }).select().single();
+  const { data, error } = await supabase.from("chat_sessions").insert({
+    document_id: documentId,
+    user_id: userId
+  }).select().single();
+
+  if (error) {
+    console.error("Error creating session:", error);
+    throw new Error("Failed to create session");
+  }
+
+  if (!data) {
+    throw new Error("No session data returned");
+  }
+
   return data;
 }
 
