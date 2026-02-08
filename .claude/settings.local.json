@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "mcp__filesystem__directory_tree",
+      "Bash(ls:*)",
+      "Bash(\"C:\\\\Users\\\\ESWAR\\\\OneDrive\\\\Desktop\\\\Agentic AI scope\\\\scope-platform\\\\supabase\\\\migrations\\\\007_chat_system.sql\" << 'EOFMIG'\n\n-- ============================================\n-- VECTOR SEARCH FUNCTION\n-- ============================================\n\nCREATE OR REPLACE FUNCTION match_paragraphs\\(\n  query_embedding vector\\(1536\\),\n  match_threshold float DEFAULT 0.5,\n  match_count int DEFAULT 20,\n  p_document_id uuid DEFAULT NULL\n\\)\nRETURNS TABLE \\(\n  paragraph_id text,\n  content text,\n  section_id text,\n  section_title text,\n  similarity float,\n  order_index int\n\\)\nLANGUAGE plpgsql\nAS $\nBEGIN\n  RETURN QUERY\n  SELECT\n    p.paragraph_id,\n    p.content,\n    p.section_id,\n    s.title as section_title,\n    1 - \\(e.embedding <=> query_embedding\\) as similarity,\n    p.order_index\n  FROM embeddings e\n  JOIN paragraphs p ON e.paragraph_id = p.paragraph_id\n  JOIN sections s ON p.section_id = s.section_id\n  WHERE \\(p_document_id IS NULL OR p.document_id = p_document_id\\)\n    AND 1 - \\(e.embedding <=> query_embedding\\) > match_threshold\n  ORDER BY e.embedding <=> query_embedding\n  LIMIT match_count;\nEND;\n$;\n\nCOMMENT ON FUNCTION match_paragraphs IS 'Semantic search using vector similarity for RAG chatbot';\nEOFMIG)"
+    ]
+  }
+}
